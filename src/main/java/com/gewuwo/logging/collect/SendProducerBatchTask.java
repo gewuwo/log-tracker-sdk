@@ -1,6 +1,10 @@
 package com.gewuwo.logging.collect;
 
+import com.gewuwo.logging.client.Client;
+import com.gewuwo.logging.errors.RetriableErrors;
+import com.gewuwo.logging.model.LogTrackerRecord;
 import com.google.common.math.LongMath;
+import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -19,8 +23,6 @@ public class SendProducerBatchTask implements Runnable {
 
     private static final Logger LOGGER = LogManager.getLogger(SendProducerBatchTask.class);
 
-    private static final String TAG_PACK_ID = "__pack_id__";
-
     private final ProducerBatch batch;
 
     private final ProducerConfig producerConfig;
@@ -29,10 +31,6 @@ public class SendProducerBatchTask implements Runnable {
 
     private final RetryQueue retryQueue;
 
-    private final BlockingQueue<ProducerBatch> successQueue;
-
-    private final BlockingQueue<ProducerBatch> failureQueue;
-
     private final AtomicInteger batchCount;
 
     public SendProducerBatchTask(
@@ -40,15 +38,11 @@ public class SendProducerBatchTask implements Runnable {
         ProducerConfig producerConfig,
         Map<String, Client> clientPool,
         RetryQueue retryQueue,
-        BlockingQueue<ProducerBatch> successQueue,
-        BlockingQueue<ProducerBatch> failureQueue,
         AtomicInteger batchCount) {
         this.batch = batch;
         this.producerConfig = producerConfig;
         this.clientPool = clientPool;
         this.retryQueue = retryQueue;
-        this.successQueue = successQueue;
-        this.failureQueue = failureQueue;
         this.batchCount = batchCount;
     }
 
@@ -60,8 +54,6 @@ public class SendProducerBatchTask implements Runnable {
             LOGGER.error(
                 "Uncaught error in send producer batch task, project="
                     + batch.getProject()
-                    + ", logStore="
-                    + batch.getLogStore()
                     + ", e=",
                 t);
         }
@@ -73,33 +65,19 @@ public class SendProducerBatchTask implements Runnable {
         Client client = getClient(project);
         if (client == null) {
             LOGGER.error("Failed to get client, project={}", project);
-            Attempt attempt =
-                new Attempt(
-                    false,
-                    "",
-                    Errors.PROJECT_CONFIG_NOT_EXIST,
-                    "Cannot get the projectConfig for project " + project,
-                    nowMs);
-            batch.appendAttempt(attempt);
-            failureQueue.put(batch);
         } else {
-            PutLogsResponse response;
             try {
-                PutLogsRequest request = buildPutLogsRequest(batch);
-                response = client.PutLogs(request);
+                List<LogTrackerRecord> logTrackerRecordList = buildPutLogsRequest(batch);
+                client.sendRequest(logTrackerRecordList);
             } catch (Exception e) {
                 LOGGER.error(
                     "Failed to put logs, project="
                         + batch.getProject()
-                        + ", logStore="
-                        + batch.getLogStore()
                         + ", e=",
                     e);
-                Attempt attempt = buildAttempt(e, nowMs);
-                batch.appendAttempt(attempt);
+                batch.appendAttempt();
                 if (meetFailureCondition(e)) {
                     LOGGER.debug("Prepare to put batch to the failure queue");
-                    failureQueue.put(batch);
                 } else {
                     LOGGER.debug("Prepare to put batch to the retry queue");
                     long retryBackoffMs = calculateRetryBackoffMs();
@@ -112,22 +90,17 @@ public class SendProducerBatchTask implements Runnable {
                         LOGGER.error(
                             "Failed to put batch to the retry queue, project="
                                 + batch.getProject()
-                                + ", logStore="
-                                + batch.getLogStore()
                                 + ", e=",
                             e);
                         if (retryQueue.isClosed()) {
                             LOGGER.info(
                                 "Prepare to put batch to the failure queue since the retry queue was closed");
-                            failureQueue.put(batch);
                         }
                     }
                 }
                 return;
             }
-            Attempt attempt = new Attempt(true, response.GetRequestId(), "", "", nowMs);
-            batch.appendAttempt(attempt);
-            successQueue.put(batch);
+            batch.appendAttempt();
             LOGGER.trace("Send producer batch successfully, batch={}", batch);
         }
     }
@@ -136,50 +109,12 @@ public class SendProducerBatchTask implements Runnable {
         return clientPool.get(project);
     }
 
-    private PutLogsRequest buildPutLogsRequest(ProducerBatch batch) {
-        PutLogsRequest request;
-        if (batch.getShardHash() != null && !batch.getShardHash().isEmpty()) {
-            request =
-                new PutLogsRequest(
-                    batch.getProject(),
-                    batch.getLogStore(),
-                    batch.getTopic(),
-                    batch.getSource(),
-                    batch.getLogItems(),
-                    batch.getShardHash());
-        } else {
-            request =
-                new PutLogsRequest(
-                    batch.getProject(),
-                    batch.getLogStore(),
-                    batch.getTopic(),
-                    batch.getSource(),
-                    batch.getLogItems());
-        }
-        List<TagContent> tags = new ArrayList<TagContent>();
-        tags.add(new TagContent(TAG_PACK_ID, batch.getPackageId()));
-        request.SetTags(tags);
-        if (producerConfig.getLogFormat() == ProducerConfig.LogFormat.PROTOBUF) {
-            request.setContentType(Consts.CONST_PROTO_BUF);
-        } else {
-            request.setContentType(Consts.CONST_SLS_JSON);
-        }
-        return request;
+    private List<LogTrackerRecord> buildPutLogsRequest(ProducerBatch batch) {
+
+        return batch.getLogItems();
     }
 
-    private Attempt buildAttempt(Exception e, long nowMs) {
-        if (e instanceof LogException) {
-            LogException logException = (LogException) e;
-            return new Attempt(
-                false,
-                logException.GetRequestId(),
-                logException.GetErrorCode(),
-                logException.GetErrorMessage(),
-                nowMs);
-        } else {
-            return new Attempt(false, "", Errors.PRODUCER_EXCEPTION, e.getMessage(), nowMs);
-        }
-    }
+
 
     private boolean meetFailureCondition(Exception e) {
         if (!isRetriableException(e)) {
@@ -188,25 +123,12 @@ public class SendProducerBatchTask implements Runnable {
         if (retryQueue.isClosed()) {
             return true;
         }
-        return (batch.getRetries() >= producerConfig.getRetries()
-            && failureQueue.size() <= batchCount.get() / 2);
+        return (batch.getRetries() >= producerConfig.getRetries());
     }
 
     private boolean isRetriableException(Exception e) {
-        if (e instanceof LogException) {
-            LogException logException = (LogException) e;
-            return (logException.GetErrorCode().equals(RetriableErrors.REQUEST_ERROR)
-                || logException.GetErrorCode().equals(RetriableErrors.UNAUTHORIZED)
-                || logException.GetErrorCode().equals(RetriableErrors.WRITE_QUOTA_EXCEED)
-                || logException.GetErrorCode().equals(RetriableErrors.SHARD_WRITE_QUOTA_EXCEED)
-                || logException.GetErrorCode().equals(RetriableErrors.EXCEED_QUOTA)
-                || logException.GetErrorCode().equals(RetriableErrors.INTERNAL_SERVER_ERROR)
-                || logException.GetErrorCode().equals(RetriableErrors.SERVER_BUSY)
-                || logException.GetErrorCode().equals(RetriableErrors.BAD_RESPONSE)
-                || logException.GetErrorCode().equals(RetriableErrors.PROJECT_NOT_EXISTS)
-                || logException.GetErrorCode().equals(RetriableErrors.LOGSTORE_NOT_EXISTS)
-                || logException.GetErrorCode().equals(RetriableErrors.SOCKET_TIMEOUT)
-                || logException.GetErrorCode().equals(RetriableErrors.SIGNATURE_NOT_MATCH));
+        if (e instanceof ConnectTimeoutException) {
+            return true;
         }
         return false;
     }

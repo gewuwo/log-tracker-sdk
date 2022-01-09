@@ -3,35 +3,27 @@ package com.gewuwo.logging.collect;
 /**
  * 项目唯一标识
  *
+ * <p>
+ *     当前只有项目名称，后续会扩展字段
+ * </p>
+ *
  * @author jishan.guo
  * @version 1.0
  * @since 2022/1/7 2:50 下午
  */
 public class GroupKey {
 
-    private static final String DELIMITER = "|";
+
+    /**
+     * 项目名
+     */
+    private final String project;
 
     private final String key;
 
-    private final String project;
-
-    private final String logStore;
-
-    private final String topic;
-
-    private final String source;
-
-    private final String shardHash;
-
-    public GroupKey(String project, String logStore, String topic, String source, String shardHash) {
+    public GroupKey(String project) {
         this.project = project;
-        this.logStore = logStore;
-        this.topic = topic;
-        this.source = source;
-        this.shardHash = shardHash;
-        this.key =
-            project + DELIMITER + logStore + DELIMITER + topic + DELIMITER + source + DELIMITER
-                + shardHash;
+        this.key = project;
     }
 
     @Override
@@ -66,19 +58,4 @@ public class GroupKey {
         return project;
     }
 
-    public String getLogStore() {
-        return logStore;
-    }
-
-    public String getTopic() {
-        return topic;
-    }
-
-    public String getSource() {
-        return source;
-    }
-
-    public String getShardHash() {
-        return shardHash;
-    }
 }

@@ -14,7 +14,7 @@ public class LogTest {
     private static final Logger LOGGER = LogManager.getLogger(LogTest.class);
 
     @Test
-    public void testLogAppender() {
+    public void testLogAppender() throws InterruptedException {
         LOGGER.info("testLogAppender start");
         try {
             if (1 == 1) {
@@ -23,6 +23,8 @@ public class LogTest {
         } catch (RuntimeException e) {
             LOGGER.error("testLogAppender error", e);
         }
+
+        Thread.sleep(20000L);
 
         LOGGER.info("testLogAppender end");
     }

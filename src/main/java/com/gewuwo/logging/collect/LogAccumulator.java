@@ -1,5 +1,12 @@
 package com.gewuwo.logging.collect;
 
+import com.gewuwo.logging.client.Client;
+import com.gewuwo.logging.errors.AppendTimeoutException;
+import com.gewuwo.logging.errors.LogSizeTooLargeException;
+import com.gewuwo.logging.errors.ProducerException;
+import com.gewuwo.logging.model.LogTrackerRecord;
+import com.gewuwo.logging.util.LogSizeCalculator;
+import com.google.common.util.concurrent.ListenableFuture;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -20,10 +27,6 @@ import java.util.concurrent.atomic.AtomicLong;
 public class LogAccumulator {
 
     private static final Logger LOGGER = LogManager.getLogger(LogAccumulator.class);
-
-    private static final AtomicLong BATCH_ID = new AtomicLong(0);
-
-    private final String producerHash;
 
     /**
      * 配置信息
@@ -64,41 +67,30 @@ public class LogAccumulator {
     private volatile boolean closed;
 
     public LogAccumulator(
-        String producerHash,
         ProducerConfig producerConfig,
         Map<String, Client> clientPool,
         Semaphore memoryController,
         RetryQueue retryQueue,
-        BlockingQueue<ProducerBatch> successQueue,
-        BlockingQueue<ProducerBatch> failureQueue,
         IoThreadPool ioThreadPool,
         AtomicInteger batchCount) {
-        this.producerHash = producerHash;
         this.producerConfig = producerConfig;
         this.clientPool = clientPool;
         this.memoryController = memoryController;
         this.retryQueue = retryQueue;
-        this.successQueue = successQueue;
-        this.failureQueue = failureQueue;
         this.ioThreadPool = ioThreadPool;
         this.batchCount = batchCount;
-        this.batches = new ConcurrentHashMap<GroupKey, ProducerBatchHolder>();
+        this.batches = new ConcurrentHashMap<>();
         this.appendsInProgress = new AtomicInteger(0);
         this.closed = false;
     }
 
     public ListenableFuture<Result> append(
         String project,
-        String logStore,
-        String topic,
-        String source,
-        String shardHash,
-        List<LogItem> logItems,
-        Callback callback)
+        List<LogTrackerRecord> logItems)
         throws InterruptedException, ProducerException {
         appendsInProgress.incrementAndGet();
         try {
-            return doAppend(project, logStore, topic, source, shardHash, logItems, callback);
+            return doAppend(project, logItems);
         } finally {
             appendsInProgress.decrementAndGet();
         }
@@ -106,25 +98,17 @@ public class LogAccumulator {
 
     private ListenableFuture<Result> doAppend(
         String project,
-        String logStore,
-        String topic,
-        String source,
-        String shardHash,
-        List<LogItem> logItems,
-        Callback callback)
+        List<LogTrackerRecord> logItems)
         throws InterruptedException, ProducerException {
-        if (closed) {
-            throw new IllegalStateException("cannot append after the log accumulator was closed");
-        }
+
         int sizeInBytes = LogSizeCalculator.calculate(logItems);
         ensureValidLogSize(sizeInBytes);
         long maxBlockMs = producerConfig.getMaxBlockMs();
         LOGGER.trace(
-            "Prepare to acquire bytes, sizeInBytes={}, maxBlockMs={}, project={}, logStore={}",
+            "Prepare to acquire bytes, sizeInBytes={}, maxBlockMs={}, project={}",
             sizeInBytes,
             maxBlockMs,
-            project,
-            logStore);
+            project);
         if (maxBlockMs >= 0) {
             boolean acquired =
                 memoryController.tryAcquire(sizeInBytes, maxBlockMs, TimeUnit.MILLISECONDS);
@@ -135,7 +119,7 @@ public class LogAccumulator {
                     producerConfig.getMaxBlockMs(),
                     sizeInBytes,
                     memoryController.availablePermits());
-                throw new TimeoutException(
+                throw new AppendTimeoutException(
                     "failed to acquire memory within the configured max blocking time "
                         + producerConfig.getMaxBlockMs()
                         + " ms");
@@ -144,10 +128,10 @@ public class LogAccumulator {
             memoryController.acquire(sizeInBytes);
         }
         try {
-            GroupKey groupKey = new GroupKey(project, logStore, topic, source, shardHash);
+            GroupKey groupKey = new GroupKey(project);
             ProducerBatchHolder holder = getOrCreateProducerBatchHolder(groupKey);
             synchronized (holder) {
-                return appendToHolder(groupKey, logItems, callback, sizeInBytes, holder);
+                return appendToHolder(groupKey, logItems, sizeInBytes, holder);
             }
         } catch (Exception e) {
             memoryController.release(sizeInBytes);
@@ -157,12 +141,11 @@ public class LogAccumulator {
 
     private ListenableFuture<Result> appendToHolder(
         GroupKey groupKey,
-        List<LogItem> logItems,
-        Callback callback,
+        List<LogTrackerRecord> logItems,
         int sizeInBytes,
         ProducerBatchHolder holder) {
         if (holder.producerBatch != null) {
-            ListenableFuture<Result> f = holder.producerBatch.tryAppend(logItems, sizeInBytes, callback);
+            ListenableFuture<Result> f = holder.producerBatch.tryAppend(logItems, sizeInBytes);
             if (f != null) {
                 if (holder.producerBatch.isMeetSendCondition()) {
                     holder.transferProducerBatch(
@@ -170,8 +153,6 @@ public class LogAccumulator {
                         producerConfig,
                         clientPool,
                         retryQueue,
-                        successQueue,
-                        failureQueue,
                         batchCount);
                 }
                 return f;
@@ -181,20 +162,16 @@ public class LogAccumulator {
                     producerConfig,
                     clientPool,
                     retryQueue,
-                    successQueue,
-                    failureQueue,
                     batchCount);
             }
         }
         holder.producerBatch =
             new ProducerBatch(
                 groupKey,
-                Utils.generatePackageId(producerHash, BATCH_ID),
                 producerConfig.getBatchSizeThresholdInBytes(),
                 producerConfig.getBatchCountThreshold(),
-                producerConfig.getMaxReservedAttempts(),
                 System.currentTimeMillis());
-        ListenableFuture<Result> f = holder.producerBatch.tryAppend(logItems, sizeInBytes, callback);
+        ListenableFuture<Result> f = holder.producerBatch.tryAppend(logItems, sizeInBytes);
         batchCount.incrementAndGet();
         if (holder.producerBatch.isMeetSendCondition()) {
             holder.transferProducerBatch(
@@ -202,8 +179,6 @@ public class LogAccumulator {
                 producerConfig,
                 clientPool,
                 retryQueue,
-                successQueue,
-                failureQueue,
                 batchCount);
         }
         return f;
@@ -312,8 +287,6 @@ public class LogAccumulator {
             ProducerConfig producerConfig,
             Map<String, Client> clientPool,
             RetryQueue retryQueue,
-            BlockingQueue<ProducerBatch> successQueue,
-            BlockingQueue<ProducerBatch> failureQueue,
             AtomicInteger batchCount) {
             if (producerBatch == null) {
                 return;
@@ -324,8 +297,6 @@ public class LogAccumulator {
                     producerConfig,
                     clientPool,
                     retryQueue,
-                    successQueue,
-                    failureQueue,
                     batchCount));
             producerBatch = null;
         }

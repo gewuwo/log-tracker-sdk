@@ -1,5 +1,8 @@
 package com.gewuwo.logging.collect;
 
+import com.gewuwo.logging.model.LogTrackerRecord;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -24,13 +27,11 @@ public class ProducerBatch implements Delayed {
      */
     private final GroupKey groupKey;
 
-    private final String packageId;
-
     private final int batchSizeThresholdInBytes;
 
     private final int batchCountThreshold;
 
-    private final List<LogItem> logItems = new ArrayList<LogItem>();
+    private final List<LogTrackerRecord> logItems = new ArrayList<>();
 
     /**
      * 创建时间
@@ -46,58 +47,38 @@ public class ProducerBatch implements Delayed {
 
     private int curBatchCount;
 
-    private final EvictingQueue<Attempt> reservedAttempts;
-
+    /**
+     * 尝试次数
+     */
     private int attemptCount;
+
 
     public ProducerBatch(
         GroupKey groupKey,
-        String packageId,
         int batchSizeThresholdInBytes,
         int batchCountThreshold,
-        int maxReservedAttempts,
         long nowMs) {
         this.groupKey = groupKey;
-        this.packageId = packageId;
         this.createdMs = nowMs;
         this.batchSizeThresholdInBytes = batchSizeThresholdInBytes;
         this.batchCountThreshold = batchCountThreshold;
         this.curBatchCount = 0;
         this.curBatchSizeInBytes = 0;
-        this.reservedAttempts = EvictingQueue.create(maxReservedAttempts);
         this.attemptCount = 0;
     }
 
-    public ListenableFuture<Result> tryAppend(LogItem item, int sizeInBytes, Callback callback) {
-        if (!hasRoomFor(sizeInBytes, 1)) {
-            return null;
-        } else {
-            SettableFuture<Result> future = SettableFuture.create();
-            logItems.add(item);
-            thunks.add(new Thunk(callback, future));
-            curBatchCount++;
-            curBatchSizeInBytes += sizeInBytes;
-            return future;
-        }
-    }
 
     public ListenableFuture<Result> tryAppend(
-        List<LogItem> items, int sizeInBytes, Callback callback) {
+        List<LogTrackerRecord> items, int sizeInBytes) {
         if (!hasRoomFor(sizeInBytes, items.size())) {
             return null;
         } else {
             SettableFuture<Result> future = SettableFuture.create();
             logItems.addAll(items);
-            thunks.add(new Thunk(callback, future));
             curBatchCount += items.size();
             curBatchSizeInBytes += sizeInBytes;
             return future;
         }
-    }
-
-    public void appendAttempt(Attempt attempt) {
-        reservedAttempts.add(attempt);
-        this.attemptCount++;
     }
 
     public boolean isMeetSendCondition() {
@@ -108,23 +89,11 @@ public class ProducerBatch implements Delayed {
         return lingerMs - createdTimeMs(nowMs);
     }
 
-    public void fireCallbacksAndSetFutures() {
-        List<Attempt> attempts = new ArrayList<Attempt>(reservedAttempts);
-        Attempt attempt = Iterables.getLast(attempts);
-        Result result = new Result(attempt.isSuccess(), attempts, attemptCount);
-        fireCallbacks(result);
-        setFutures(result);
-    }
-
     public GroupKey getGroupKey() {
         return groupKey;
     }
 
-    public String getPackageId() {
-        return packageId;
-    }
-
-    public List<LogItem> getLogItems() {
+    public List<LogTrackerRecord> getLogItems() {
         return logItems;
     }
 
@@ -138,22 +107,6 @@ public class ProducerBatch implements Delayed {
 
     public String getProject() {
         return groupKey.getProject();
-    }
-
-    public String getLogStore() {
-        return groupKey.getLogStore();
-    }
-
-    public String getTopic() {
-        return groupKey.getTopic();
-    }
-
-    public String getSource() {
-        return groupKey.getSource();
-    }
-
-    public String getShardHash() {
-        return groupKey.getShardHash();
     }
 
     public int getCurBatchSizeInBytes() {
@@ -174,6 +127,11 @@ public class ProducerBatch implements Delayed {
     }
 
 
+    public void appendAttempt() {
+        this.attemptCount++;
+    }
+
+
     @Override
     public long getDelay(TimeUnit unit) {
         return unit.convert(nextRetryMs - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
@@ -186,32 +144,15 @@ public class ProducerBatch implements Delayed {
 
     @Override
     public String toString() {
-        return "ProducerBatch{"
-            + "groupKey="
-            + groupKey
-            + ", packageId='"
-            + packageId
-            + '\''
-            + ", batchSizeThresholdInBytes="
-            + batchSizeThresholdInBytes
-            + ", batchCountThreshold="
-            + batchCountThreshold
-            + ", logItems="
-            + logItems
-            + ", thunks="
-            + thunks
-            + ", createdMs="
-            + createdMs
-            + ", nextRetryMs="
-            + nextRetryMs
-            + ", curBatchSizeInBytes="
-            + curBatchSizeInBytes
-            + ", curBatchCount="
-            + curBatchCount
-            + ", reservedAttempts="
-            + reservedAttempts
-            + ", attemptCount="
-            + attemptCount
-            + '}';
+        return "ProducerBatch{" +
+            "groupKey=" + groupKey +
+            ", batchSizeThresholdInBytes=" + batchSizeThresholdInBytes +
+            ", batchCountThreshold=" + batchCountThreshold +
+            ", logItems=" + logItems +
+            ", createdMs=" + createdMs +
+            ", nextRetryMs=" + nextRetryMs +
+            ", curBatchSizeInBytes=" + curBatchSizeInBytes +
+            ", curBatchCount=" + curBatchCount +
+            '}';
     }
 }

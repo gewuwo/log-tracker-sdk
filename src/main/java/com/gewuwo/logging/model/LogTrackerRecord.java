@@ -28,11 +28,6 @@ public class LogTrackerRecord implements Serializable {
     private String project;
 
     /**
-     * 日志服务的id（和project有一个即可）
-     */
-    private String projectId;
-
-    /**
      * 资源名（实际的报错位置）类名 + 方法名 + 某一行xxxx
      */
     private String resourceName;

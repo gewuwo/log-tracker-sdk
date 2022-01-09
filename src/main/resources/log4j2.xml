@@ -4,7 +4,7 @@
 -->
 <Configuration status="INFO" monitorInterval="1" packages="com.gewuwo.logging.appender">
     <Appenders>
-        <LogTracker name="logTracker" project="tracker" projectId="tracker" enabled="true">
+        <LogTracker name="logTracker" project="tracker" projectId="tracker" enabled="true" sendUrl="https://open.feishu.cn/open-apis/bot/v2/hook/a95b8abe-7168-4d82-a7a7-68bd0b8b651d">
             <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] [%-5p] {%F:%L} - %m%n"/>
         </LogTracker>
     </Appenders>
