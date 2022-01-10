@@ -1,6 +1,5 @@
 package com.gewuwo.logging.util;
 
-import lombok.experimental.UtilityClass;
 
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -15,7 +14,6 @@ import java.util.Enumeration;
  * @version 1.0
  * @since 2022/1/5 10:39 上午
  */
-@UtilityClass
 public class MachineIpUtils {
 
     private static volatile String ipAddr;

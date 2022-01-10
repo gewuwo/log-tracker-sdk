@@ -1,6 +1,5 @@
 package com.gewuwo.logging.util;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
@@ -9,6 +8,7 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 
@@ -25,6 +25,25 @@ import java.util.Set;
  * @date: 2021-12-28 14:32
  **/
 public class HttpClientUtils {
+
+
+    public static String post(String url, String data) throws ClientProtocolException, IOException {
+        HttpClient httpClient = HttpClients.createDefault();
+        HttpPost httpPost = new HttpPost(url);
+        //设置请求和传输超时时间
+        RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(60000).setConnectTimeout(60000).build();
+        httpPost.setConfig(requestConfig);
+//        httpPost.setHeader("Content-Type", "text/json; charset=utf-8");
+        httpPost.setHeader("Content-Type", "application/json; charset=utf-8");
+//        httpPost.setEntity(new StringEntity(URLEncoder.encode(data, "UTF-8")));
+        httpPost.setEntity(new StringEntity(data,"UTF-8"));
+        HttpResponse response = httpClient.execute(httpPost);
+        String httpEntityContent = getHttpEntityContent(response);
+        httpPost.abort();
+        return httpEntityContent;
+    }
+
+
     /**
      * 封装HTTP POST方法
      *

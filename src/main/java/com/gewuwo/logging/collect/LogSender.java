@@ -82,7 +82,7 @@ public class LogSender {
 
 
 	public void putProjectConfig(String project, String url) {
-		clientPool.put(project, new FeiShuClient(url));
+		clientPool.put(project, new LogTrackerServerClient(url));
 	}
 
 	public void send(String project, List<LogTrackerRecord> logRecordList) throws InterruptedException, ProducerException {

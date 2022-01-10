@@ -102,16 +102,14 @@ public class LogTrackerAppender extends AbstractAppender {
 			DateTimeFormatter formatter = DateTimeFormatter.ofPattern(NORM_DATETIME_PATTERN);
 			String time = localDateTime.format(formatter);
 
-			LogTrackerRecord trackerRecord = LogTrackerRecord.builder()
-				.logLevel(event.getLevel().toString())
-				.hostIp(MachineIpUtils.getIp())
-				.project(project)
-				.hostIp(hostIp)
-				.traceId(traceId)
-				.resourceName(event.getSource().toString())
-				.message(throwableStr)
-				.time(time)
-				.build();
+			LogTrackerRecord trackerRecord = new LogTrackerRecord();
+			trackerRecord.setLogLevel(event.getLevel().toString());
+			trackerRecord.setProject(project);
+			trackerRecord.setHostIp(hostIp);
+			trackerRecord.setTraceId(traceId);
+			trackerRecord.setResourceName(event.getSource().toString());
+			trackerRecord.setMessage(throwableStr);
+			trackerRecord.setTime(time);
 
 			String s = JSONObject.toJSONString(trackerRecord, SerializerFeature.PrettyFormat);
 			LOGGER.error("succ  trackerRecord:{}", s);

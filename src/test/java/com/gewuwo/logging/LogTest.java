@@ -17,8 +17,9 @@ public class LogTest {
     public void testLogAppender() throws InterruptedException {
         LOGGER.info("testLogAppender start");
         try {
-            if (1 == 1) {
-                throw new RuntimeException("抛出一个异常试试");
+            String fit = getTestString("fit");
+            if (fit.contains("f")) {
+                throw new RuntimeException("抛出一个异常试试-gjs");
             }
         } catch (RuntimeException e) {
             LOGGER.error("testLogAppender error", e);
@@ -27,6 +28,11 @@ public class LogTest {
         Thread.sleep(20000L);
 
         LOGGER.info("testLogAppender end");
+    }
+
+
+    public String getTestString(String msg) {
+        return msg + "test";
     }
 
 }
