@@ -1,14 +1,13 @@
 package com.gewuwo.logging.collect;
 
 import com.gewuwo.logging.client.Client;
-import com.gewuwo.logging.client.FeiShuClient;
-import com.gewuwo.logging.client.LogTrackerServerClient;
+import com.gewuwo.logging.client.ClientEnum;
 import com.gewuwo.logging.errors.ProducerException;
 import com.gewuwo.logging.model.LogTrackerRecord;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -81,8 +80,23 @@ public class LogSender {
 	}
 
 
-	public void putProjectConfig(String project, String url) {
-		clientPool.put(project, new LogTrackerServerClient(url));
+	public void putProjectConfig(String project, String sendClient, String url) {
+		ClientEnum clientEnum = ClientEnum.CLIENT_MAP.get(sendClient);
+		Client client = null;
+
+		if (clientEnum != null) {
+			try {
+				Class<?> clientClass = Class.forName(clientEnum.getClientClassName());
+				Constructor<?> constructor = clientClass.getConstructor(String.class);
+				client = (Client) constructor.newInstance(url);
+			} catch (Exception e) {
+				LOGGER.info("logTracker 获取发送客户端失败:{}", e.getMessage());
+			}
+		}
+
+		if (client != null) {
+			clientPool.put(project, client);
+		}
 	}
 
 	public void send(String project, List<LogTrackerRecord> logRecordList) throws InterruptedException, ProducerException {

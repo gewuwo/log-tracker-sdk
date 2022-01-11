@@ -13,5 +13,10 @@ import java.util.List;
  */
 public interface Client {
 
-	void sendRequest(List<LogTrackerRecord> logTrackerRecordList);
+    /**
+     * 发送消息
+     *
+     * @param logTrackerRecordList 日志列表
+     */
+    void sendRequest(List<LogTrackerRecord> logTrackerRecordList);
 }
