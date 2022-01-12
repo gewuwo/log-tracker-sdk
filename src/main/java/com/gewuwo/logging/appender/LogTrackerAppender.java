@@ -4,29 +4,24 @@ import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.gewuwo.logging.collect.LogSender;
 import com.gewuwo.logging.collect.ProducerConfig;
-import com.gewuwo.logging.errors.ProducerException;
 import com.gewuwo.logging.model.LogTrackerRecord;
-import com.gewuwo.logging.util.MachineIpUtils;
-import com.gewuwo.logging.util.SendFeiShuUtil;
 import org.apache.logging.log4j.core.*;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.plugins.Plugin;
-import org.apache.logging.log4j.core.config.plugins.PluginBuilderAttribute;
 import org.apache.logging.log4j.core.config.plugins.PluginBuilderFactory;
-import org.apache.logging.log4j.core.impl.ThrowableProxy;
 import org.apache.logging.log4j.core.util.Throwables;
 import org.apache.logging.log4j.util.Strings;
 import org.apache.skywalking.apm.toolkit.trace.TraceContext;
 
 import java.io.Serializable;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
-import java.util.Objects;
 import java.util.UUID;
+
+import static com.gewuwo.logging.collect.ProducerConfig.*;
 
 /**
  * 错误追踪 Appender
@@ -38,54 +33,74 @@ import java.util.UUID;
 @Plugin(name = "LogTracker", category = Core.CATEGORY_NAME, elementType = Appender.ELEMENT_TYPE, printObject = true)
 public class LogTrackerAppender extends AbstractAppender {
 
-
     public static final int CCT_HOURS = 8;
 
     public final String NORM_DATETIME_PATTERN = "yyyy-MM-dd HH:mm:ss";
 
-    private final String project;
+    protected final Boolean enabled;
 
-    private final String sendUrl;
+    protected final String project;
 
-    private final String hostIp;
+    protected final String senderClient;
 
-    /**
-     * 重试次数
-     */
-    private final Integer retries;
+    protected final String sendUrl;
 
-    /**
-     * 是否开启
-     */
-    private final boolean enabled;
+    protected final String hostIp;
 
+    protected final Integer retries;
 
-    private final String senderClient;
+    protected Integer totalSizeInBytes;
+
+    protected Integer maxBlockMs;
+
+    protected Integer ioThreadCount;
+
+    protected Integer batchSizeThresholdInBytes;
+
+    protected Integer batchCountThreshold;
+
+    protected Integer lingerMs;
+
+    protected Integer baseRetryBackoffMs;
+
+    protected Integer maxRetryBackoffMs;
+
 
     protected LogSender sender;
 
 
-    protected int totalSizeInBytes;
-    protected int maxBlockMs;
-    protected int ioThreadCount;
-    protected int batchSizeThresholdInBytes;
-    protected int batchCountThreshold;
-    protected int lingerMs;
-    protected int baseRetryBackoffMs;
-    protected int maxRetryBackoffMs;
+    private final ProducerConfig producerConfig = new ProducerConfig();
 
 
-    private ProducerConfig producerConfig = new ProducerConfig();
-
-
-    protected LogTrackerAppender(String name, Filter filter, Layout<? extends Serializable> layout, String project, String hostIp
-        , Integer retries, String sendUrl, String senderClient, boolean enabled) {
+    protected LogTrackerAppender(String name, Filter filter, Layout<? extends Serializable> layout,
+                                 String project,
+                                 String hostIp,
+                                 Integer retries,
+                                 String sendUrl,
+                                 String senderClient,
+                                 Integer totalSizeInBytes,
+                                 Integer maxBlockMs,
+                                 Integer ioThreadCount,
+                                 Integer batchSizeThresholdInBytes,
+                                 Integer batchCountThreshold,
+                                 Integer lingerMs,
+                                 Integer baseRetryBackoffMs,
+                                 Integer maxRetryBackoffMs,
+                                 Boolean enabled) {
         super(name, filter, layout);
         this.project = project;
         this.hostIp = hostIp;
         this.retries = retries;
         this.sendUrl = sendUrl;
         this.senderClient = senderClient;
+        this.totalSizeInBytes = totalSizeInBytes;
+        this.maxBlockMs = maxBlockMs;
+        this.ioThreadCount = ioThreadCount;
+        this.batchSizeThresholdInBytes = batchSizeThresholdInBytes;
+        this.batchCountThreshold = batchCountThreshold;
+        this.lingerMs = lingerMs;
+        this.baseRetryBackoffMs = baseRetryBackoffMs;
+        this.maxRetryBackoffMs = maxRetryBackoffMs;
         this.enabled = enabled;
     }
 
@@ -133,14 +148,41 @@ public class LogTrackerAppender extends AbstractAppender {
     public void start() {
         super.start();
 
-//		producerConfig.setBatchCountThreshold(batchCountThreshold);
-//		producerConfig.setBatchSizeThresholdInBytes(batchSizeThresholdInBytes);
-//		producerConfig.setIoThreadCount(ioThreadCount);
-//		producerConfig.setRetries(retries);
-//		producerConfig.setBaseRetryBackoffMs(baseRetryBackoffMs);
-//		producerConfig.setLingerMs(lingerMs);
-//		producerConfig.setMaxBlockMs(maxBlockMs);
-//		producerConfig.setMaxRetryBackoffMs(maxRetryBackoffMs);
+        if (batchCountThreshold != null && batchCountThreshold > 0 && batchCountThreshold <= MAX_BATCH_COUNT) {
+            producerConfig.setBatchCountThreshold(batchCountThreshold);
+        }
+
+        if (batchSizeThresholdInBytes != null && batchSizeThresholdInBytes > 0 && batchSizeThresholdInBytes <= MAX_BATCH_SIZE_IN_BYTES) {
+            producerConfig.setBatchSizeThresholdInBytes(batchSizeThresholdInBytes);
+        }
+
+        if (ioThreadCount != null && ioThreadCount > 0) {
+            producerConfig.setIoThreadCount(ioThreadCount);
+        }
+
+        if (baseRetryBackoffMs != null && baseRetryBackoffMs > 0) {
+            producerConfig.setBaseRetryBackoffMs(baseRetryBackoffMs);
+        }
+
+        if (retries != null) {
+            producerConfig.setRetries(retries);
+        }
+
+        if (lingerMs != null && lingerMs >= LINGER_MS_LOWER_LIMIT) {
+            producerConfig.setLingerMs(lingerMs);
+        }
+
+        if (maxBlockMs != null) {
+            producerConfig.setMaxBlockMs(maxBlockMs);
+        }
+
+        if (maxRetryBackoffMs != null && maxRetryBackoffMs > 0) {
+            producerConfig.setMaxRetryBackoffMs(maxRetryBackoffMs);
+        }
+
+        if (totalSizeInBytes != null && totalSizeInBytes > 0) {
+            producerConfig.setTotalSizeInBytes(totalSizeInBytes);
+        }
 
         sender = new LogSender(producerConfig);
 
@@ -187,45 +229,9 @@ public class LogTrackerAppender extends AbstractAppender {
 
 
     @PluginBuilderFactory
-    public static <B extends Builder<B>> B newBuilder() {
-        return new Builder<B>().asBuilder();
+    public static <B extends LogTrackerAppenderBuilder<B>> B newBuilder() {
+        return new LogTrackerAppenderBuilder<B>().asBuilder();
     }
 
-
-    public static class Builder<B extends Builder<B>> extends AbstractAppender.Builder<B>
-        implements org.apache.logging.log4j.core.util.Builder<LogTrackerAppender> {
-
-        @PluginBuilderAttribute
-        private String project;
-
-        @PluginBuilderAttribute
-        private String sendUrl;
-
-        @PluginBuilderAttribute
-        private String senderClient;
-
-        @PluginBuilderAttribute
-        private Integer retries;
-
-        @PluginBuilderAttribute
-        private boolean enabled;
-
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public B asBuilder() {
-            return (B) this;
-        }
-
-        @Override
-        public LogTrackerAppender build() {
-            String hostIp = MachineIpUtils.getIp();
-            if (Strings.isBlank(project)) {
-                project = "fittime_" + UUID.randomUUID();
-            }
-            return new LogTrackerAppender(getName(), getFilter(), getLayout(), project, hostIp, retries, sendUrl, senderClient, enabled);
-        }
-
-    }
 
 }

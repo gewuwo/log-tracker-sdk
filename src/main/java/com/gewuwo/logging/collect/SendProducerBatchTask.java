@@ -1,17 +1,14 @@
 package com.gewuwo.logging.collect;
 
 import com.gewuwo.logging.client.Client;
-import com.gewuwo.logging.errors.RetriableErrors;
 import com.gewuwo.logging.model.LogTrackerRecord;
 import com.google.common.math.LongMath;
 import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -114,8 +111,12 @@ public class SendProducerBatchTask implements Runnable {
         return batch.getLogItems();
     }
 
-
-
+    /**
+     * 是否满足失败条件
+     *
+     * @param e 异常信息
+     * @return 是否满足
+     */
     private boolean meetFailureCondition(Exception e) {
         if (!isRetriableException(e)) {
             return true;
@@ -126,11 +127,14 @@ public class SendProducerBatchTask implements Runnable {
         return (batch.getRetries() >= producerConfig.getRetries());
     }
 
+    /**
+     * 判断是否可重试异常
+     *
+     * @param e 异常信息
+     * @return 是否可重试
+     */
     private boolean isRetriableException(Exception e) {
-        if (e instanceof ConnectTimeoutException) {
-            return true;
-        }
-        return false;
+        return e instanceof ConnectTimeoutException;
     }
 
     private long calculateRetryBackoffMs() {

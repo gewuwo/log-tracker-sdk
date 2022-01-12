@@ -20,8 +20,6 @@ import java.util.concurrent.TimeUnit;
  */
 public class ProducerBatch implements Delayed {
 
-    private static final Logger LOGGER = LogManager.getLogger(ProducerBatch.class);
-
     /**
      * 服务标识
      */

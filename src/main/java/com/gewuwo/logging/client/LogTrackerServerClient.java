@@ -34,7 +34,7 @@ public class LogTrackerServerClient implements Client {
 		try {
 			String post = HttpClientUtils.post(url, s);
 			LOGGER.info(post);
-		} catch (IOException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}

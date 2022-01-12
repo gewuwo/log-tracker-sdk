@@ -27,18 +27,17 @@ import java.util.Set;
 public class HttpClientUtils {
 
 
-    public static String post(String url, String data) throws ClientProtocolException, IOException {
+    public static String post(String url, String data) throws IOException {
         HttpClient httpClient = HttpClients.createDefault();
         HttpPost httpPost = new HttpPost(url);
         //设置请求和传输超时时间
         RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(60000).setConnectTimeout(60000).build();
         httpPost.setConfig(requestConfig);
-//        httpPost.setHeader("Content-Type", "text/json; charset=utf-8");
         httpPost.setHeader("Content-Type", "application/json; charset=utf-8");
-//        httpPost.setEntity(new StringEntity(URLEncoder.encode(data, "UTF-8")));
         httpPost.setEntity(new StringEntity(data,"UTF-8"));
+        String httpEntityContent;
         HttpResponse response = httpClient.execute(httpPost);
-        String httpEntityContent = getHttpEntityContent(response);
+        httpEntityContent = getHttpEntityContent(response);
         httpPost.abort();
         return httpEntityContent;
     }

@@ -19,9 +19,7 @@ public class ExpiredBatches {
 	}
 
 	public void add(ProducerBatch producerBatch) {
-		if (!batches.add(producerBatch)) {
-			throw new IllegalStateException("failed to add producer batch to expired batches");
-		}
+		batches.add(producerBatch);
 	}
 
 	public long getRemainingMs() {

@@ -16,45 +16,19 @@ import java.util.Enumeration;
  */
 public class MachineIpUtils {
 
-    private static volatile String ipAddr;
+    private static volatile String ip;
 
-    public static String getHostIp() {
 
-        String sIP = "";
-        InetAddress ip = null;
-        try {
-            boolean bFindIP = false;
-            Enumeration<NetworkInterface> netInterfaces = NetworkInterface.getNetworkInterfaces();
-            while (netInterfaces.hasMoreElements()) {
-                if (bFindIP) {
-                    break;
-                }
-
-                NetworkInterface ni = netInterfaces.nextElement();
-                Enumeration<InetAddress> ips = ni.getInetAddresses();
-                while (ips.hasMoreElements()) {
-                    ip = ips.nextElement();
-                    if (!ip.isLoopbackAddress()
-                        && ip.getHostAddress().matches("(\\d{1,3}\\.){3}\\d{1,3}")) {
-                        bFindIP = true;
-                        break;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        if (null != ip) {
-            sIP = ip.getHostAddress();
-        }
-        return sIP;
-    }
-
+    /**
+     * 获取ip
+     *
+     * @return ip
+     */
     public static String getIp() {
-        if (null != ipAddr) {
-            return ipAddr;
+        if (null != ip) {
+            return ip;
         } else {
-            Enumeration netInterfaces;
+            Enumeration<NetworkInterface> netInterfaces;
             try {
                 netInterfaces = NetworkInterface.getNetworkInterfaces();
             } catch (SocketException var6) {
@@ -64,14 +38,14 @@ public class MachineIpUtils {
             String localIpAddress = null;
 
             while (netInterfaces.hasMoreElements()) {
-                NetworkInterface netInterface = (NetworkInterface) netInterfaces.nextElement();
-                Enumeration ipAddresses = netInterface.getInetAddresses();
+                NetworkInterface netInterface = netInterfaces.nextElement();
+                Enumeration<InetAddress> ipAddresses = netInterface.getInetAddresses();
 
                 while (ipAddresses.hasMoreElements()) {
-                    InetAddress ipAddress = (InetAddress) ipAddresses.nextElement();
+                    InetAddress ipAddress = ipAddresses.nextElement();
                     if (isPublicIpAddress(ipAddress)) {
                         String publicIpAddress = ipAddress.getHostAddress();
-                        ipAddr = publicIpAddress;
+                        ip = publicIpAddress;
                         return publicIpAddress;
                     }
 
@@ -81,21 +55,21 @@ public class MachineIpUtils {
                 }
             }
 
-            ipAddr = localIpAddress;
+            ip = localIpAddress;
             return localIpAddress;
         }
     }
 
     private static boolean isPublicIpAddress(InetAddress ipAddress) {
-        return !ipAddress.isSiteLocalAddress() && !ipAddress.isLoopbackAddress() && !isV6IpAddress(ipAddress);
+        return !ipAddress.isSiteLocalAddress() && !ipAddress.isLoopbackAddress() && notV6IpAddress(ipAddress);
     }
 
     private static boolean isLocalIpAddress(InetAddress ipAddress) {
-        return ipAddress.isSiteLocalAddress() && !ipAddress.isLoopbackAddress() && !isV6IpAddress(ipAddress);
+        return ipAddress.isSiteLocalAddress() && !ipAddress.isLoopbackAddress() && notV6IpAddress(ipAddress);
     }
 
-    private static boolean isV6IpAddress(InetAddress ipAddress) {
-        return ipAddress.getHostAddress().contains(":");
+    private static boolean notV6IpAddress(InetAddress ipAddress) {
+        return !ipAddress.getHostAddress().contains(":");
     }
 
     public static String getHostName() {
