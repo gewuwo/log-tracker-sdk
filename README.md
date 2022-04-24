@@ -7,7 +7,7 @@
 | 参数 | 描述 |
 |---|---|
 | enabled | 是否启用，默认为false |
-| project | 项目名称，为空则使用fittime_UUID |
+| project | 项目名称，为空则使用tracker_UUID |
 | senderClient | 发送客户端（不可为空），当前可选值为：<br/>tracker-server（tracker服务端）feishu（飞书） |
 | sendUrl | 发送的接口地址（不可为空） |
 | retries | 重试次数，默认为 10  |
@@ -19,6 +19,8 @@
 | lingerMs | 一个 ProducerBatch 从创建到可发送的逗留时间，默认为 2 秒，最小可设置成 100 毫秒 |
 | baseRetryBackoffMs | 首次重试的退避时间，默认为 100 毫秒。<br/>Producer 采样指数退避算法，第 N 次重试的计划等待时间为 baseRetryBackoffMs * 2^(N-1) |
 | maxRetryBackoffMs | 重试的最大退避时间，默认为 50 秒 |
+| basePackageName | 最大错误消息行数拦截的包名，配合 {maxErrorMessageLine} 字段一起使用，例如拦截com.gewuwo.xx可以配置：gewuwo |
+| maxErrorMessageLine | 最大错误消息行数，默认为10<br/>检测到某个关键字之后再取 {maxErrorMessageLine} 行 |
 
 
 

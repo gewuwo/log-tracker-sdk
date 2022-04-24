@@ -4,7 +4,7 @@
 -->
 <Configuration status="INFO" monitorInterval="1" packages="com.gewuwo.logging.appender">
     <Appenders>
-        <LogTracker name="logTracker" project="tracker" projectId="tracker" enabled="true" senderClient="tracker-server" sendUrl="http://192.168.1.36:8081/api/log/tracker/error">
+        <LogTracker name="logTracker" project="tracker" enabled="true" senderClient="tracker-server" sendUrl="http://192.168.1.36:8081/api/log/tracker/error">
             <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] [%-5p] {%F:%L} - %m%n"/>
         </LogTracker>
     </Appenders>

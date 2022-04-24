@@ -8,7 +8,7 @@ import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 
 /**
- * @author jishan.guo
+ * @author gewuwo
  * @version 1.0
  * @since 2022/1/6 3:18 下午
  */
