@@ -1,6 +1,9 @@
 # log-tracker-sdk
 日志追踪sdk
 
+## 原理流程
+
+![img.png](docs/imgs/原理流程图.png)
 
 ## 配置参数说明
 
