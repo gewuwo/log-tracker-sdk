@@ -3,7 +3,14 @@
 
 ## 原理流程
 
-![img.png](docs/imgs/原理流程图.png)
+### 整体流程
+
+![原理流程图.png](docs/imgs/原理流程图.png)
+
+### 客户端流程
+
+![sdk流程.png](docs/imgs/sdk流程.png)
+
 
 ## 配置参数说明
 
